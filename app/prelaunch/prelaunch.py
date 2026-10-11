@@ -4,9 +4,11 @@
 
 import sys
 
+import crossover_update
+
 
 def main() -> int:
-    print("Hello, world")
+    crossover_update.run()
     return 0
 
 

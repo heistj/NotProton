@@ -60,7 +60,7 @@ TARGET      := $(OUT_DIR)/notproton.dylib
 OBJS := $(patsubst %.c,$(OUT_DIR)/%.o,$(SRCS))
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all clean rebuild dobby deploy dylib dylib-install sigcheck fonts fonts-install app-payload app app-zip \
+.PHONY: all clean rebuild dobby deploy dylib dylib-install sigcheck fonts fonts-install app-payload app app-zip prelaunch-tests \
         anchorcheck callscheck sigdb-fixtures webpatch-fixtures peicon-fixtures panel-behavior app-tests \
         tests-list overlay-shim overlay-shim-install overlay-shim-tests \
         overlay-shim-bench iconmaker icon \
@@ -596,7 +596,14 @@ app: app-payload $(ICON_CAR)
 		"$(APP_BUNDLE)/Contents/MacOS/NotProtonApp.real"
 	# The bundle's executable runs app/prelaunch/prelaunch.py, then the real binary.
 	install -m 755 app/prelaunch/launcher.sh "$(APP_BUNDLE)/Contents/MacOS/NotProtonApp"
-	install -m 644 app/prelaunch/prelaunch.py "$(APP_BUNDLE)/Contents/Resources/prelaunch.py"
+	for py in app/prelaunch/*.py; do case "$$py" in */test_*) ;; *) \
+		install -m 644 "$$py" "$(APP_BUNDLE)/Contents/Resources/" ;; esac; done
+	# The CrossOver updater offers only builds this NotProton can set up a runner for.
+	@builds=$$(sed -n 's/.*bundleVersion: "\([0-9.]*\)".*/\1/p' \
+		app/Sources/NotProtonApp/Model/SupportedRunner.swift | sort -u); \
+	if [ -z "$$builds" ]; then echo "==> no bundleVersion found in SupportedRunner.swift" >&2; exit 1; fi; \
+	printf '%s\n' $$builds | /usr/bin/python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))' \
+		> "$(APP_BUNDLE)/Contents/Resources/supported-crossover.json"
 	cp -R "$$(swift build --package-path app -c release --show-bin-path)/NotProtonApp_NotProtonApp.bundle" \
 		"$(APP_BUNDLE)/Contents/Resources/"
 	cp "$(ICON_DIR)/Assets.car" "$(ICON_DIR)/NotProton.icns" \
@@ -616,6 +623,9 @@ app: app-payload $(ICON_CAR)
 	codesign -f -s "$(APP_SIGN_ID)" "$(APP_BUNDLE)"
 	codesign --verify --strict "$(APP_BUNDLE)"
 	@echo "==> Built $(APP_BUNDLE) ($(APP_VERSION))"
+
+prelaunch-tests:
+	cd app/prelaunch && /usr/bin/python3 -m unittest -q test_prelaunch
 
 app-zip: app
 	rm -f "$(APP_ZIP)"
