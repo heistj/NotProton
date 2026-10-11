@@ -588,12 +588,15 @@ app: app-payload $(ICON_CAR)
 		"Set :CFBundleVersion $(APP_VERSION)" \
 		"$(APP_BUNDLE)/Contents/Info.plist"
 	cp "$$(swift build --package-path app -c release --show-bin-path)/NotProtonApp" \
-		"$(APP_BUNDLE)/Contents/MacOS/NotProtonApp"
+		"$(APP_BUNDLE)/Contents/MacOS/NotProtonApp.real"
 	@mkdir -p "$(APP_BUNDLE)/Contents/Frameworks"
 	ditto "$$(swift build --package-path app -c release --show-bin-path)/Sparkle.framework" \
 		"$(APP_BUNDLE)/Contents/Frameworks/Sparkle.framework"
 	install_name_tool -add_rpath @executable_path/../Frameworks \
-		"$(APP_BUNDLE)/Contents/MacOS/NotProtonApp"
+		"$(APP_BUNDLE)/Contents/MacOS/NotProtonApp.real"
+	# The bundle's executable runs app/prelaunch/prelaunch.py, then the real binary.
+	install -m 755 app/prelaunch/launcher.sh "$(APP_BUNDLE)/Contents/MacOS/NotProtonApp"
+	install -m 644 app/prelaunch/prelaunch.py "$(APP_BUNDLE)/Contents/Resources/prelaunch.py"
 	cp -R "$$(swift build --package-path app -c release --show-bin-path)/NotProtonApp_NotProtonApp.bundle" \
 		"$(APP_BUNDLE)/Contents/Resources/"
 	cp "$(ICON_DIR)/Assets.car" "$(ICON_DIR)/NotProton.icns" \
@@ -609,6 +612,7 @@ app: app-payload $(ICON_CAR)
 		exit 1; \
 	fi
 	@echo "==> Payload complete in the bundle"
+	codesign -f -s "$(APP_SIGN_ID)" "$(APP_BUNDLE)/Contents/MacOS/NotProtonApp.real"
 	codesign -f -s "$(APP_SIGN_ID)" "$(APP_BUNDLE)"
 	codesign --verify --strict "$(APP_BUNDLE)"
 	@echo "==> Built $(APP_BUNDLE) ($(APP_VERSION))"
