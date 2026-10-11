@@ -23,6 +23,7 @@ export PATH
 fail() {
   echo "=== $(date) prelaunch blocked the launch: $1 ===" >> "$log"
   # A quote or backslash would end the AppleScript string early.
+  # shellcheck disable=SC1003 # the pair deletes a literal backslash, not a quote
   detail=$(printf '%s' "$2" | tr -d '"\\' | tail -c 1500)
   osascript >/dev/null 2>&1 <<APPLESCRIPT
 display alert "NotProton did not open" message "$1

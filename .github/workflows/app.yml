@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      version:
+        description: App version to build, in place of dylib/version.h
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -17,7 +22,8 @@ env:
 jobs:
   build:
     name: full app build
-    runs-on: xcode-27
+    # A fork without the xcode-27 runner sets the MACOS_RUNNER repository variable.
+    runs-on: ${{ vars.MACOS_RUNNER || 'xcode-27' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +106,9 @@ jobs:
         run: make app-payload
 
       - name: Build the app
-        run: make app
+        env:
+          VERSION: ${{ inputs.version }}
+        run: make app ${VERSION:+APP_VERSION="$VERSION"}
 
       - name: Check the minimum macOS version
         run: make -s mincheck

@@ -31,8 +31,8 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>SUFeedURL</key>
-	<string>https://github.com/NotProtonNot/NotProton/releases/latest/download/appcast.xml</string>
+	<string>https://github.com/heistj/NotProton/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>rDOXzJ+vt12aWeu9hATgvz6q46MlRcgR4gbTfj5YuWQ=</string>
+	<string>zI+gCRHZ+pVGEcVW3PWzcjm/fgRmG4r90HsHmEsHNZs=</string>
 </dict>
 </plist>
