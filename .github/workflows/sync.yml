@@ -14,26 +14,35 @@ jobs:
   sync:
     name: merge upstream/main
     runs-on: ubuntu-latest
+    outputs:
+      synced: ${{ steps.merge.outputs.synced }}
+      version: ${{ steps.merge.outputs.version }}
+      release_notes: ${{ steps.merge.outputs.release_notes }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Fetch and merge upstream
+        id: merge
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git remote add upstream https://github.com/NotProtonNot/NotProton.git || true
           git fetch upstream main
+          git fetch --tags origin
 
           BEHIND_COUNT=$(git rev-list --count HEAD..upstream/main)
           echo "Commits behind upstream: $BEHIND_COUNT"
 
           if [ "$BEHIND_COUNT" -eq 0 ]; then
             echo "Already up to date with upstream."
+            echo "synced=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          OLD_HEAD=$(git rev-parse HEAD)
 
           echo "Merging upstream/main into main..."
           if git merge --no-edit upstream/main; then
@@ -44,6 +53,35 @@ jobs:
             git merge --abort
             exit 1
           fi
+
+          # Compute the next version based on dylib/version.h and existing git tags
+          NEXT_VERSION=$(python3 -c '
+import subprocess
+base_ver = subprocess.check_output(
+    ["sed", "-n", "s/^#define NOTPROTON_VERSION \"\\(.*\\)\"/\\1/p", "dylib/version.h"],
+    text=True
+).strip()
+tags = subprocess.check_output(["git", "tag", "-l"], text=True).splitlines()
+prefix = f"v{base_ver}."
+build_nums = [int(t[len(prefix):]) for t in tags if t.startswith(prefix) and t[len(prefix):].isdigit()]
+next_num = max(build_nums) + 1 if build_nums else 1
+print(f"{base_ver}.{next_num}")
+')
+
+          echo "Next release version: $NEXT_VERSION"
+
+          UPSTREAM_COMMITS=$(git log --format="- %s (%h)" "$OLD_HEAD..upstream/main")
+
+          RELEASE_NOTES="Automated release following upstream sync ($NEXT_VERSION):
+
+Merged upstream commits:
+$UPSTREAM_COMMITS"
+
+          echo "synced=true" >> "$GITHUB_OUTPUT"
+          echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$RELEASE_NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Notify on conflict
         if: failure()
@@ -71,3 +109,13 @@ git commit
 git push origin main
 \`\`\`" \
             || true
+
+  release:
+    name: publish release
+    needs: sync
+    if: needs.sync.outputs.synced == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.sync.outputs.version }}
+      release_notes: ${{ needs.sync.outputs.release_notes }}
+    secrets: inherit

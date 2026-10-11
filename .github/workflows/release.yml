@@ -11,6 +11,16 @@ on:
         description: Release notes
         required: true
         type: string
+  workflow_call:
+    inputs:
+      version:
+        description: Version to release
+        required: true
+        type: string
+      release_notes:
+        description: Release notes
+        required: true
+        type: string
 
 permissions:
   contents: write

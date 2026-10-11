@@ -23,8 +23,9 @@ Each change touches few upstream lines, so merges stay small.
 
 Upstream changes are automatically merged every 6 hours via the `sync-upstream` GitHub Actions
 workflow (`.github/workflows/sync.yml`). It fetches `upstream/main`, merges cleanly into `main`,
-and pushes. If a conflict occurs, it aborts the merge and opens an issue to notify you. You can
-also trigger it on demand from **Actions → sync-upstream → Run workflow**.
+pushes, and automatically triggers a new release with signed Sparkle appcast. If a conflict occurs,
+it aborts the merge and opens an issue (notifying you via email) so manual resolution can take place.
+You can also trigger the sync on demand from **Actions → sync-upstream → Run workflow**.
 
 For manual syncing in a local working copy:
 
