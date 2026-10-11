@@ -1,10 +1,12 @@
-# Updates CrossOver before NotProton opens, but only to a build this NotProton
-# supports. A newer build NotProton cannot use yet gets a one-time warning
-# instead, since installing it would leave NotProton unable to set up a runner.
+# Installs or updates CrossOver before NotProton opens, but only to a build this
+# NotProton supports. A newer build NotProton cannot use yet gets a one-time
+# warning instead, since installing it would leave NotProton unable to set up a
+# runner.
 #
 # The download must carry CodeWeavers' Sparkle EdDSA signature, checked against
-# the key in the installed CrossOver, and the app inside must be code signed by
-# CodeWeavers' team. Nothing is installed without the user agreeing first.
+# the key in the installed CrossOver or, with none installed, CodeWeavers' key
+# pinned below. The app inside must be code signed by CodeWeavers' team.
+# Nothing is installed without the user agreeing first.
 
 import base64
 import json
@@ -25,6 +27,9 @@ import ed25519
 FEED_URL = "https://www.codeweavers.com/xml/versions/cxmac.xml"
 BUNDLE_ID = "com.codeweavers.CrossOver"
 TEAM_ID = "9C6B7X7Z8E"
+# SUPublicEDKey from CrossOver 26.3's Info.plist. A fresh install has no installed
+# CrossOver to take the key from, so it checks against this one.
+CODEWEAVERS_KEY = "HtsRMTX0R0Oqe+aWIftCC6Q4Zck7L7n9DpXkbrp7tww="
 SPARKLE = "{http://www.andymatuschak.org/xml-namespaces/sparkle}"
 
 HOME = Path.home()
@@ -56,7 +61,7 @@ class Installed:
 
 @dataclass(frozen=True)
 class Decision:
-    action: str  # "update" or "warn"
+    action: str  # "install", "update" or "warn"
     release: Release
 
 
@@ -91,8 +96,17 @@ def parse_feed(xml_bytes):
 
 
 def plan(installed_version, releases, supported, state, macos_version):
-    """What to offer, given the feed. Pure, so the policy can be tested on its own."""
+    """What to offer, given the feed. installed_version is None when CrossOver is not
+    installed. Pure, so the policy can be tested on its own."""
     runnable = [r for r in releases if version_key(r.minimum_macos) <= version_key(macos_version)]
+    if installed_version is None:
+        usable = [r for r in runnable if r.version in supported]
+        if not usable:
+            return None
+        target = max(usable, key=lambda r: version_key(r.version))
+        if target.version == state.get("declined_install"):
+            return None
+        return Decision("install", target)
     newer = [r for r in runnable if version_key(r.version) > version_key(installed_version)]
     if not newer:
         return None
@@ -180,11 +194,9 @@ class UpdateError(Exception):
     pass
 
 
-def verify_signature(archive, release, installed):
-    if not installed.public_key:
-        raise UpdateError("the installed CrossOver carries no update key to check the download against")
+def verify_signature(archive, release, public_key):
     try:
-        public = base64.b64decode(installed.public_key, validate=True)
+        public = base64.b64decode(public_key, validate=True)
         signature = base64.b64decode(release.ed_signature, validate=True)
     except ValueError as e:
         raise UpdateError(f"a key or signature is not valid base64: {e}")
@@ -224,13 +236,17 @@ def quit_crossover():
 
 
 def replace_app(new_app, dest):
-    """Swaps new_app in at dest, putting the old one back if the swap fails."""
+    """Puts new_app at dest. An app already there is swapped out, and put back if the
+    swap fails."""
     staged = dest.with_name(".CrossOver.app.new")
     backup = dest.with_name(".CrossOver.app.old")
     for leftover in (staged, backup):
         if leftover.exists():
             shutil.rmtree(leftover)
     subprocess.run(["ditto", str(new_app), str(staged)], check=True)
+    if not dest.exists():
+        os.rename(staged, dest)
+        return
     os.rename(dest, backup)
     try:
         os.rename(staged, dest)
@@ -240,10 +256,18 @@ def replace_app(new_app, dest):
     shutil.rmtree(backup, ignore_errors=True)
 
 
-def install(release, installed):
-    if not os.access(installed.path.parent, os.W_OK):
-        raise UpdateError(f"{installed.path.parent} is not writable by this account")
-    if crossover_running() and not quit_crossover():
+def install_location():
+    """/Applications when this account can write to it, otherwise ~/Applications."""
+    if os.access("/Applications", os.W_OK):
+        return APP_LOCATIONS[0]
+    APP_LOCATIONS[1].parent.mkdir(exist_ok=True)
+    return APP_LOCATIONS[1]
+
+
+def install(release, dest, public_key):
+    if not os.access(dest.parent, os.W_OK):
+        raise UpdateError(f"{dest.parent} is not writable by this account")
+    if dest.exists() and crossover_running() and not quit_crossover():
         raise UpdateError("CrossOver is still open. Quit it and open NotProton again")
 
     notify(f"Downloading CrossOver {release.display}…")
@@ -251,7 +275,7 @@ def install(release, installed):
         archive = Path(work) / "crossover.zip"
         print(f"downloading {release.url}")
         download(release.url, release.length, archive)
-        verify_signature(archive, release, installed)
+        verify_signature(archive, release, public_key)
         print("signature verified")
         extracted = Path(work) / "extracted"
         subprocess.run(["ditto", "-x", "-k", str(archive), str(extracted)], check=True)
@@ -260,21 +284,18 @@ def install(release, installed):
             raise UpdateError("the download does not contain CrossOver.app")
         verify_app(app, release)
         print("code signature verified")
-        replace_app(app, installed.path)
-    print(f"installed CrossOver {release.version} at {installed.path}")
+        replace_app(app, dest)
+    print(f"installed CrossOver {release.version} at {dest}")
 
 
 def run(now=None):
-    """Checks for a CrossOver update and acts on it. Never raises, so a failed check
-    or update cannot keep NotProton from opening."""
+    """Checks for a CrossOver install or update and acts on it. Never raises, so a
+    failed check or install cannot keep NotProton from opening."""
     now = time.time() if now is None else now
     state = load_state()
     installed = find_installed()
-    if installed is None:
-        print("CrossOver is not installed, nothing to update")
-        return
     if now - state.get("last_check", 0) < CHECK_INTERVAL:
-        print("CrossOver update check ran recently, skipping")
+        print("CrossOver check ran recently, skipping")
         return
 
     try:
@@ -283,12 +304,13 @@ def run(now=None):
             releases = parse_feed(response.read())
         supported = load_supported()
     except Exception as e:  # offline, feed down, or a malformed feed
-        print(f"CrossOver update check skipped: {e}")
+        print(f"CrossOver check skipped: {e}")
         return
 
     state["last_check"] = now
-    decision = plan(installed.version, releases, supported, state, platform.mac_ver()[0])
-    print(f"CrossOver {installed.version} installed; decision: "
+    decision = plan(installed.version if installed else None, releases, supported, state,
+                    platform.mac_ver()[0])
+    print(f"CrossOver {installed.version if installed else 'not installed'}; decision: "
           f"{decision.action + ' ' + decision.release.version if decision else 'none'}")
 
     if decision and decision.action == "warn":
@@ -296,13 +318,33 @@ def run(now=None):
              f"CrossOver {decision.release.display} is out, but this version of NotProton does not "
              f"support it yet. Keep CrossOver at its current version until a NotProton update adds it.")
         state["warned"] = decision.release.version
+    elif decision and decision.action == "install":
+        if ask("Install CrossOver",
+               f"NotProton runs Windows games through CrossOver, which is not installed. Download "
+               f"CrossOver {decision.release.display} from CodeWeavers and install it now? NotProton "
+               f"opens when it finishes.",
+               ok="Install", cancel="Not Now"):
+            dest = install_location()
+            try:
+                install(decision.release, dest, CODEWEAVERS_KEY)
+                if ask("CrossOver installed",
+                       f"CrossOver {decision.release.display} is installed. Open it once to start "
+                       f"your trial or enter your license, then set up its compatibility tool in "
+                       f"NotProton.",
+                       ok="Open CrossOver", cancel="Later"):
+                    subprocess.run(["open", str(dest)])
+            except Exception as e:
+                print(f"CrossOver install failed: {e}")
+                tell("CrossOver was not installed", f"The install failed: {e}")
+        else:
+            state["declined_install"] = decision.release.version
     elif decision and decision.action == "update":
         if ask("CrossOver update",
                f"CrossOver {decision.release.display} is available and supported by NotProton. "
                f"Download and install it now? NotProton opens when it finishes.",
                ok="Update", cancel="Not Now"):
             try:
-                install(decision.release, installed)
+                install(decision.release, installed.path, installed.public_key or CODEWEAVERS_KEY)
                 tell("CrossOver updated",
                      f"CrossOver {decision.release.display} is installed. Set up its compatibility "
                      f"tool in NotProton before playing.")

@@ -78,7 +78,41 @@ class PlanTests(unittest.TestCase):
         self.assertIsNone(d)
 
 
+class FreshInstallPlanTests(unittest.TestCase):
+    def test_newest_supported_build_is_offered(self):
+        releases = [release("26.3.0.39832"), release("26.4.0.39900")]
+        d = cu.plan(None, releases, {"26.3.0.39832"}, {}, "26.6")
+        self.assertEqual((d.action, d.release.version), ("install", "26.3.0.39832"))
+
+    def test_nothing_supported_offers_nothing(self):
+        self.assertIsNone(cu.plan(None, [release("26.4.0.39900")], {"26.3.0.39832"}, {}, "26.6"))
+
+    def test_declined_install_is_not_offered_again(self):
+        state = {"declined_install": "26.3.0.39832"}
+        self.assertIsNone(cu.plan(None, [release("26.3.0.39832")], {"26.3.0.39832"}, state, "26.6"))
+
+    def test_newer_supported_build_is_offered_after_a_decline(self):
+        state = {"declined_install": "26.3.0.39832"}
+        releases = [release("26.3.0.39832"), release("27.0.0.41069")]
+        d = cu.plan(None, releases, {"26.3.0.39832", "27.0.0.41069"}, state, "26.6")
+        self.assertEqual((d.action, d.release.version), ("install", "27.0.0.41069"))
+
+
 class ReplaceTests(unittest.TestCase):
+    def test_places_the_app_where_none_was(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            dest = root / "Applications" / "CrossOver.app"
+            dest.parent.mkdir()
+            new = root / "new" / "CrossOver.app"
+            (new / "Contents").mkdir(parents=True)
+            (new / "Contents" / "new").write_text("new")
+
+            cu.replace_app(new, dest)
+
+            self.assertTrue((dest / "Contents" / "new").exists())
+            self.assertEqual(sorted(p.name for p in dest.parent.iterdir()), ["CrossOver.app"])
+
     def test_swaps_the_app_and_leaves_nothing_behind(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
