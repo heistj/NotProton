@@ -54,34 +54,19 @@ jobs:
             exit 1
           fi
 
-          # Compute the next version based on dylib/version.h and existing git tags
-          NEXT_VERSION=$(python3 -c '
-import subprocess
-base_ver = subprocess.check_output(
-    ["sed", "-n", "s/^#define NOTPROTON_VERSION \"\\(.*\\)\"/\\1/p", "dylib/version.h"],
-    text=True
-).strip()
-tags = subprocess.check_output(["git", "tag", "-l"], text=True).splitlines()
-prefix = f"v{base_ver}."
-build_nums = [int(t[len(prefix):]) for t in tags if t.startswith(prefix) and t[len(prefix):].isdigit()]
-next_num = max(build_nums) + 1 if build_nums else 1
-print(f"{base_ver}.{next_num}")
-')
-
+          NEXT_VERSION=$(python3 -c 'import pathlib, re, subprocess; text = pathlib.Path("dylib/version.h").read_text(); m = re.search(r"#define NOTPROTON_VERSION \"(.*)\"", text); base = m.group(1) if m else "1.1.6"; tags = subprocess.check_output(["git", "tag", "-l"], text=True).splitlines(); p = f"v{base}."; nums = [int(t[len(p):]) for t in tags if t.startswith(p) and t[len(p):].isdigit()]; print(f"{base}.{max(nums)+1 if nums else 1}")')
           echo "Next release version: $NEXT_VERSION"
 
           UPSTREAM_COMMITS=$(git log --format="- %s (%h)" "$OLD_HEAD..upstream/main")
+          RELEASE_NOTES=$(printf "Automated release following upstream sync (%s):\n\nMerged upstream commits:\n%s" "$NEXT_VERSION" "$UPSTREAM_COMMITS")
 
-          RELEASE_NOTES="Automated release following upstream sync ($NEXT_VERSION):
-
-Merged upstream commits:
-$UPSTREAM_COMMITS"
-
-          echo "synced=true" >> "$GITHUB_OUTPUT"
-          echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
-          echo "release_notes<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$RELEASE_NOTES" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "synced=true"
+            echo "version=$NEXT_VERSION"
+            echo "release_notes<<EOF"
+            echo "$RELEASE_NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Notify on conflict
         if: failure()
@@ -93,21 +78,21 @@ $UPSTREAM_COMMITS"
             --assignee "heistj" \
             --body "Hi @heistj (heisterbergjon@gmail.com),
 
-An automated attempt to merge \`NotProtonNot/NotProton:main\` into \`main\` encountered conflicts.
+            An automated attempt to merge \`NotProtonNot/NotProton:main\` into \`main\` encountered conflicts.
 
-- **Repository**: ${{ github.repository }}
-- **Workflow Run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-- **Recipient**: heisterbergjon@gmail.com
+            - **Repository**: ${{ github.repository }}
+            - **Workflow Run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            - **Recipient**: heisterbergjon@gmail.com
 
-Please resolve the merge conflict manually in your local copy:
-\`\`\`bash
-git switch main
-git fetch upstream
-git merge upstream/main
-# resolve conflicting files
-git commit
-git push origin main
-\`\`\`" \
+            Please resolve the merge conflict manually in your local copy:
+            \`\`\`bash
+            git switch main
+            git fetch upstream
+            git merge upstream/main
+            # resolve conflicting files
+            git commit
+            git push origin main
+            \`\`\`" \
             || true
 
   release:
