@@ -1,0 +1,56 @@
+name: sync-upstream
+
+on:
+  schedule:
+    # Run every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync:
+    name: merge upstream/main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch and merge upstream
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream https://github.com/NotProtonNot/NotProton.git || true
+          git fetch upstream main
+
+          BEHIND_COUNT=$(git rev-list --count HEAD..upstream/main)
+          echo "Commits behind upstream: $BEHIND_COUNT"
+
+          if [ "$BEHIND_COUNT" -eq 0 ]; then
+            echo "Already up to date with upstream."
+            exit 0
+          fi
+
+          echo "Merging upstream/main into main..."
+          if git merge --no-edit upstream/main; then
+            echo "Merge succeeded cleanly. Pushing to origin..."
+            git push origin main
+          else
+            echo "Merge conflict detected!" >&2
+            git merge --abort
+            exit 1
+          fi
+
+      - name: Notify on conflict
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Upstream sync merge conflict" \
+            --body "An automated attempt to merge \`NotProtonNot/NotProton:main\` into \`main\` encountered conflicts. Please merge manually." \
+            || true

@@ -21,11 +21,12 @@ Each change touches few upstream lines, so merges stay small.
 
 ## Keeping up with upstream
 
-Remotes in a working copy:
+Upstream changes are automatically merged every 6 hours via the `sync-upstream` GitHub Actions
+workflow (`.github/workflows/sync.yml`). It fetches `upstream/main`, merges cleanly into `main`,
+and pushes. If a conflict occurs, it aborts the merge and opens an issue to notify you. You can
+also trigger it on demand from **Actions → sync-upstream → Run workflow**.
 
-    git remote add upstream https://github.com/NotProtonNot/NotProton.git   # once
-
-Then, whenever upstream moves:
+For manual syncing in a local working copy:
 
     git switch main
     git fetch upstream
