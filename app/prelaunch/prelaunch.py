@@ -4,10 +4,12 @@
 
 import sys
 
+import crossover_reset
 import crossover_update
 
 
 def main() -> int:
+    crossover_reset.run()
     crossover_update.run()
     return 0
 

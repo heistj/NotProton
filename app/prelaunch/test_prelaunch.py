@@ -4,8 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import crossover_reset as cr
 import crossover_update as cu
 import ed25519
+import prelaunch
 
 FEED = b"""<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
@@ -159,5 +161,54 @@ class Ed25519Tests(unittest.TestCase):
             self.assertTrue(ed25519.verify_file(pk, f.name, sig, chunk_size=1))
 
 
+class CrossoverResetTests(unittest.TestCase):
+    def test_remove_reg_section_removes_section_and_preserves_others(self):
+        with tempfile.TemporaryDirectory() as d:
+            reg_path = Path(d) / "system.reg"
+            initial = (
+                "WINE REGISTRY Version 2\n\n"
+                "[Software\\\\CodeWeavers\\\\CrossOver\\\\cxoffice] 1234567890\n"
+                '"FirstRunDate"="2026/01/01"\n'
+                '"SomeOtherKey"=dword:00000001\n\n'
+                "[Software\\\\Wine] 1234567890\n"
+                '"Version"="wine-9.0"\n'
+            )
+            reg_path.write_text(initial)
+
+            result = cr.remove_reg_section(reg_path, cr.TARGET_SECTION)
+            self.assertTrue(result)
+
+            content = reg_path.read_text()
+            self.assertNotIn("CodeWeavers", content)
+            self.assertNotIn("FirstRunDate", content)
+            self.assertIn("[Software\\\\Wine]", content)
+            self.assertIn('"Version"="wine-9.0"', content)
+
+    def test_remove_reg_section_returns_false_when_missing(self):
+        with tempfile.TemporaryDirectory() as d:
+            reg_path = Path(d) / "system.reg"
+            initial = "[Software\\\\Wine]\n\"Version\"=\"wine-9.0\"\n"
+            reg_path.write_text(initial)
+
+            result = cr.remove_reg_section(reg_path, cr.TARGET_SECTION)
+            self.assertFalse(result)
+            self.assertEqual(reg_path.read_text(), initial)
+
+    def test_prelaunch_main_calls_reset_and_update(self):
+        called = []
+        orig_reset = cr.run
+        orig_update = cu.run
+        try:
+            cr.run = lambda: called.append("reset")
+            cu.run = lambda: called.append("update")
+            ret = prelaunch.main()
+            self.assertEqual(ret, 0)
+            self.assertEqual(called, ["reset", "update"])
+        finally:
+            cr.run = orig_reset
+            cu.run = orig_update
+
+
 if __name__ == "__main__":
     unittest.main()
+
