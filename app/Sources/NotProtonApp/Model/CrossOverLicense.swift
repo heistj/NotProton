@@ -30,16 +30,67 @@ enum CrossOverLicense {
 
     static let defaultOpenssl = "/usr/bin/openssl"
 
+    // CrossOver's trial runs this long from the FirstRunDate it records on first launch.
+    // That date is an unsigned preference, so a trial is only as hard to extend as
+    // CrossOver's own. compat_run.sh repeats this check on every launch.
+    static let trialLength: TimeInterval = 14 * 24 * 60 * 60
+    static let trialEndedTitle = "Your CrossOver trial has ended."
+    static let trialEndedAdvice = "Buy a CrossOver license to keep using NotProton."
+    static var trialEnded: String { "\(trialEndedTitle) \(trialEndedAdvice)" }
+
     static func check(
         crossOverRoot: URL,
         searchDirs: [URL] = defaultSearchDirs,
-        openssl: String = defaultOpenssl
+        openssl: String = defaultOpenssl,
+        now: Date = Date()
     ) -> Status {
-        let status = evaluate(
+        var status = evaluate(
             crossOverRoot: crossOverRoot, searchDirs: searchDirs, openssl: openssl
         )
+        // A bundle without CrossOver's key is not CrossOver, trial or not.
+        if !status.licensed, FileManager.default.fileExists(atPath: keyFile(in: crossOverRoot)),
+           let trial = trial(searchDirs: searchDirs, now: now, license: status) {
+            status = trial
+        }
         AppLog.note("license: \(status.diagnostic)")
         return status
+    }
+
+    private static func keyFile(in crossOverRoot: URL) -> String {
+        crossOverRoot.appending(path: "share/crossover/data/tie.pub").path(percentEncoded: false)
+    }
+
+    // Only the user domain, the first search directory, holds CrossOver's preferences.
+    private static func trial(searchDirs: [URL], now: Date, license: Status) -> Status? {
+        guard let prefs = searchDirs.first?.appending(path: "\(licenseBase).plist"),
+              let data = try? Data(contentsOf: prefs),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil)
+                as? [String: Any],
+              let started = plist["FirstRunDate"] as? Date
+        else { return nil }
+
+        let ends = started.addingTimeInterval(trialLength)
+        let when = ends.formatted(date: .abbreviated, time: .shortened)
+        // A start date ahead of the clock would stretch the trial past its length.
+        guard started <= now.addingTimeInterval(60 * 60) else {
+            return Status(
+                licensed: false,
+                detail: license.detail,
+                diagnostic: "\(license.diagnostic); trial start \(started) is in the future"
+            )
+        }
+        guard now < ends else {
+            return Status(
+                licensed: false,
+                detail: trialEnded,
+                diagnostic: "\(license.diagnostic); trial ended \(ends)"
+            )
+        }
+        return Status(
+            licensed: true,
+            detail: "CrossOver trial active until \(when).",
+            diagnostic: "\(license.diagnostic); trial active until \(ends)"
+        )
     }
 
     private static func evaluate(
@@ -47,9 +98,7 @@ enum CrossOverLicense {
         searchDirs: [URL],
         openssl: String
     ) -> Status {
-        let keyFile = crossOverRoot.appending(
-            path: "share/crossover/data/tie.pub"
-        ).path(percentEncoded: false)
+        let keyFile = keyFile(in: crossOverRoot)
 
         guard FileManager.default.fileExists(atPath: keyFile) else {
             return Status(
@@ -123,8 +172,10 @@ enum CrossOverLicense {
         )
     }
 
-    static func requireValid(for install: CrossOverInstall) throws {
-        let status = check(crossOverRoot: install.crossOverRoot)
+    static func requireValid(
+        for install: CrossOverInstall, searchDirs: [URL] = defaultSearchDirs
+    ) throws {
+        let status = check(crossOverRoot: install.crossOverRoot, searchDirs: searchDirs)
         guard status.licensed else {
             throw StepFailure(
                 step: "Verify CrossOver license",

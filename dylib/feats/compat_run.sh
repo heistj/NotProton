@@ -498,6 +498,59 @@ if [ -z "$np_build" ] || [ ! -d "$CX_ROOT/lib/wine" ]; then
 fi
 echo "runner: build $np_build ($np_display) at $CX_ROOT" >> "$log" 2>&1 || true
 
+# Mirrors CrossOverLicense.swift. The cloned Wine never checks the license itself, so a
+# trial is held to its fourteen days here, on every launch, not only when NotProton sets up.
+np_trial_days=14
+license_verdict() {
+  key="$CX_ROOT/share/crossover/data/tie.pub"
+  [ -f "$key" ] || { echo "no verification key in the CrossOver bundle"; return 1; }
+  for dir in "$HOME/Library/Preferences" /Library/Preferences; do
+    lic="$dir/com.codeweavers.CrossOver.license"
+    [ -f "$lic" ] || continue
+    for pair in sha256:-sha256 sig:-sha1; do
+      sig="$lic"; sig="${sig%.license}.${pair%%:*}"
+      [ -f "$sig" ] || continue
+      if /usr/bin/openssl dgst "${pair#*:}" -verify "$key" -signature "$sig" "$lic" >/dev/null 2>&1; then
+        echo "valid license in $dir"
+        return 0
+      fi
+    done
+  done
+  prefs="$HOME/Library/Preferences/com.codeweavers.CrossOver.plist"
+  [ "$(plutil -type FirstRunDate "$prefs" 2>/dev/null)" = date ] \
+    || { echo "no signed license and no CrossOver trial"; return 1; }
+  started=$(plutil -extract FirstRunDate raw -o - "$prefs" 2>/dev/null)
+  started=$(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$started" +%s 2>/dev/null) \
+    || { echo "no signed license and an unreadable trial start"; return 1; }
+  now=$(date +%s)
+  ends=$((started + np_trial_days * 86400))
+  if [ "$started" -gt $((now + 3600)) ]; then
+    echo "no signed license and a trial start in the future"
+    return 1
+  fi
+  if [ "$now" -ge "$ends" ]; then
+    echo "no signed license and the trial ended $(date -r "$ends")"
+    return 2
+  fi
+  echo "trial active until $(date -r "$ends")"
+}
+
+stage_step="license check"
+license_status=0
+license_note=$(license_verdict) || license_status=$?
+echo "license: $license_note" >> "$log" 2>&1 || true
+case "$license_status" in
+  0) ;;
+  2)
+    show_alert "Your CrossOver trial has ended." "Buy a CrossOver license to keep using NotProton."
+    exit 1
+    ;;
+  *)
+    show_alert "CrossOver does not appear to be activated." "Please run CrossOver and try again."
+    exit 1
+    ;;
+esac
+
 # Each CrossOver build needs its own template.
 # FEX builds need two, one for FEX/arm64 Wine and one for Rosetta/AMD64 Wine
 runner_id=""

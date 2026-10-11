@@ -202,8 +202,7 @@ struct CrossOverLicenseTests {
         #expect(status.detail == CrossOverLicense.notActivated)
     }
 
-    // The reason reaches the user only through the thrown failure. requireValid searches the
-    // machine's own directories, so only the two agreeing is fixed, not the text itself.
+    // The reason reaches the user only through the thrown failure, so the two must agree.
     @Test("The refusal carries the reason the check found and nothing else")
     func refusalCarriesTheReason() throws {
         let fix = try Self.fixture()
@@ -212,13 +211,15 @@ struct CrossOverLicenseTests {
             bundle: fix.bundle, releaseVersion: nil, support: .unreadable
         )
 
-        // A key generated for this fixture verifies no license on this machine, and a
-        // machine with no license has nothing to find either.
-        let expected = CrossOverLicense.check(crossOverRoot: install.crossOverRoot)
+        // The fixture's own directories, so a CrossOver trial running on this machine
+        // does not pass the check.
+        let expected = CrossOverLicense.check(
+            crossOverRoot: install.crossOverRoot, searchDirs: fix.searchDirs
+        )
         #expect(!expected.licensed)
 
         do {
-            try CrossOverLicense.requireValid(for: install)
+            try CrossOverLicense.requireValid(for: install, searchDirs: fix.searchDirs)
             Issue.record("requireValid accepted a bundle whose key verifies nothing")
         } catch let failure as StepFailure {
             #expect(failure.detail == expected.detail)
@@ -258,5 +259,94 @@ struct CrossOverLicenseTests {
         #expect(!status.licensed)
         #expect(status.diagnostic.contains("could not be checked"))
         #expect(status.detail == CrossOverLicense.notActivated)
+    }
+
+    private static func writeTrial(in dir: URL, started: Date) throws {
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: ["FirstRunDate": started], format: .binary, options: 0
+        )
+        try data.write(to: dir.appending(path: "\(base).plist"))
+    }
+
+    private static let day: TimeInterval = 24 * 60 * 60
+
+    @Test("A trial inside its fourteen days is accepted")
+    func activeTrialIsAccepted() throws {
+        let fix = try Self.fixture()
+        defer { fix.remove() }
+        let now = Date()
+        try Self.writeTrial(in: fix.local, started: now.addingTimeInterval(-3 * Self.day))
+
+        let status = CrossOverLicense.check(
+            crossOverRoot: fix.root, searchDirs: fix.searchDirs, now: now
+        )
+        #expect(status.licensed)
+        #expect(status.detail.contains("trial active"))
+        #expect(status.diagnostic.contains("no CrossOver license file found"))
+    }
+
+    @Test("A trial past its fourteen days is refused as ended")
+    func endedTrialIsRefused() throws {
+        let fix = try Self.fixture()
+        defer { fix.remove() }
+        let now = Date()
+        try Self.writeTrial(in: fix.local, started: now.addingTimeInterval(-15 * Self.day))
+
+        let status = CrossOverLicense.check(
+            crossOverRoot: fix.root, searchDirs: fix.searchDirs, now: now
+        )
+        #expect(!status.licensed)
+        #expect(status.detail == CrossOverLicense.trialEnded)
+        #expect(status.diagnostic.contains("trial ended"))
+    }
+
+    @Test("A trial start ahead of the clock is refused")
+    func futureTrialIsRefused() throws {
+        let fix = try Self.fixture()
+        defer { fix.remove() }
+        let now = Date()
+        try Self.writeTrial(in: fix.local, started: now.addingTimeInterval(30 * Self.day))
+
+        let status = CrossOverLicense.check(
+            crossOverRoot: fix.root, searchDirs: fix.searchDirs, now: now
+        )
+        #expect(!status.licensed)
+        #expect(status.diagnostic.contains("in the future"))
+    }
+
+    // CrossOver keeps its preferences only in the user domain.
+    @Test("A trial recorded in the system directory is ignored")
+    func systemTrialIsIgnored() throws {
+        let fix = try Self.fixture()
+        defer { fix.remove() }
+        try Self.writeTrial(in: fix.system, started: Date())
+
+        let status = CrossOverLicense.check(crossOverRoot: fix.root, searchDirs: fix.searchDirs)
+        #expect(!status.licensed)
+        #expect(status.diagnostic == "no CrossOver license file found")
+    }
+
+    @Test("A trial does not pass a bundle carrying no verification key")
+    func trialNeedsTheBundleKey() throws {
+        let fix = try Self.fixture(withKey: false)
+        defer { fix.remove() }
+        try Self.writeTrial(in: fix.local, started: Date())
+
+        let status = CrossOverLicense.check(crossOverRoot: fix.root, searchDirs: fix.searchDirs)
+        #expect(!status.licensed)
+        #expect(status.diagnostic == "no verification key in the CrossOver bundle")
+    }
+
+    @Test("A signed license wins over an ended trial")
+    func licenseWinsOverEndedTrial() throws {
+        let fix = try Self.fixture()
+        defer { fix.remove() }
+        let license = try Self.writeLicense(in: fix.local)
+        try Self.sign(license, with: fix.key, digest: "-sha256", sidecar: "sha256")
+        try Self.writeTrial(in: fix.local, started: Date().addingTimeInterval(-60 * Self.day))
+
+        let status = CrossOverLicense.check(crossOverRoot: fix.root, searchDirs: fix.searchDirs)
+        #expect(status.licensed)
+        #expect(status.detail == "CrossOver is activated.")
     }
 }
