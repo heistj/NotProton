@@ -24,8 +24,8 @@ enum CrossOverLicense {
 
     private static let licenseBase = "com.codeweavers.CrossOver"
 
-    static let notActivatedTitle = "CrossOver does not appear to be activated."
-    static let notActivatedAdvice = "Please run CrossOver and try again."
+    static let notActivatedTitle = L10n.tr("CrossOver does not appear to be activated.")
+    static let notActivatedAdvice = L10n.tr("Please run CrossOver and try again.")
     static var notActivated: String { "\(notActivatedTitle) \(notActivatedAdvice)" }
 
     static let defaultOpenssl = "/usr/bin/openssl"
@@ -143,7 +143,7 @@ enum CrossOverLicense {
                 if result.succeeded {
                     return Status(
                         licensed: true,
-                        detail: "CrossOver is activated.",
+                        detail: L10n.tr("CrossOver is activated."),
                         diagnostic: "valid license in \(label)"
                     )
                 }
@@ -178,7 +178,7 @@ enum CrossOverLicense {
         let status = check(crossOverRoot: install.crossOverRoot, searchDirs: searchDirs)
         guard status.licensed else {
             throw StepFailure(
-                step: "Verify CrossOver license",
+                step: L10n.tr("Verify CrossOver license"),
                 detail: status.detail
             )
         }
