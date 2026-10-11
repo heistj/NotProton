@@ -44,6 +44,7 @@ while IFS= read -r f; do
 done < "$list"
 
 main="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+[ -f "$main.real" ] && main="$main.real"
 built=$(xcrun vtool -show-build "$main" 2>/dev/null | awk '$1 == "sdk" { print $2; exit }')
 if [ -z "$built" ] || newer "$sdk" "$built"; then
   echo "  built against SDK ${built:-unknown}, below $sdk: ${main#"$app"/}"
