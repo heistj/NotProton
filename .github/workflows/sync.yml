@@ -51,6 +51,23 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue create \
-            --title "Upstream sync merge conflict" \
-            --body "An automated attempt to merge \`NotProtonNot/NotProton:main\` into \`main\` encountered conflicts. Please merge manually." \
+            --title "⚠️ Upstream sync merge conflict" \
+            --assignee "heistj" \
+            --body "Hi @heistj (heisterbergjon@gmail.com),
+
+An automated attempt to merge \`NotProtonNot/NotProton:main\` into \`main\` encountered conflicts.
+
+- **Repository**: ${{ github.repository }}
+- **Workflow Run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+- **Recipient**: heisterbergjon@gmail.com
+
+Please resolve the merge conflict manually in your local copy:
+\`\`\`bash
+git switch main
+git fetch upstream
+git merge upstream/main
+# resolve conflicting files
+git commit
+git push origin main
+\`\`\`" \
             || true
