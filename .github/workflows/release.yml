@@ -24,7 +24,7 @@ jobs:
   release:
     name: publish release
     needs: build
-    runs-on: ${{ vars.MACOS_RUNNER || 'xcode-27' }}
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
 

@@ -14,8 +14,8 @@ README still applies; this file covers only what differs.
 - **Updates come from this fork.** `SUFeedURL` and `SUPublicEDKey` in `app/Info.plist` point at
   this repository's releases and its own Sparkle key, so an update never swaps in an upstream
   build without the changes above.
-- **Workflows run without upstream's runner.** `app.yml` and `release.yml` read the runner from
-  the `MACOS_RUNNER` repository variable, falling back to upstream's `xcode-27`.
+- **Releases build the fork's version.** `release.yml` passes its version input through
+  `app.yml` to `make app`, and tags the release as whoever runs it.
 
 Each change touches few upstream lines, so merges stay small.
 
@@ -50,10 +50,11 @@ upstream ships 1.1.6, `1.1.6.1`. The release workflow passes it to `make app APP
 One-time setup:
 
 1. **Settings → Actions → General:** allow Actions (forks start with them disabled).
-2. **Settings → Secrets and variables → Actions:**
-   - variable `MACOS_RUNNER` = a GitHub-hosted macOS runner with Xcode 27 at
-     `/Applications/Xcode_27.0.app`, such as `macos-26`
-   - secret `SPARKLE_PRIVATE_KEY` = the private half of this fork's Sparkle key
+2. **Settings → Secrets and variables → Actions:** secret `SPARKLE_PRIVATE_KEY` = the
+   private half of this fork's Sparkle key
+
+The workflows run on GitHub's hosted `xcode-27` runner, a preview image, so jobs can wait in
+the queue for a while.
 
 Then **Actions → release → Run workflow** with the version and release notes. It builds and
 tests the app, signs the appcast, tags `v<version>`, and publishes the release.

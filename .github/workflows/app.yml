@@ -22,8 +22,7 @@ env:
 jobs:
   build:
     name: full app build
-    # A fork without the xcode-27 runner sets the MACOS_RUNNER repository variable.
-    runs-on: ${{ vars.MACOS_RUNNER || 'xcode-27' }}
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
