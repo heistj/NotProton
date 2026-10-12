@@ -130,6 +130,12 @@ launchercheck:
 mincheck:
 	@sh dylib/tests/mincheck.sh "$(APP_BUNDLE)" "$(MIN_VER)" "$(GLASS_SDK)"
 
+.PHONY: l10ncheck
+l10ncheck:
+	@bin=$$(swift build --package-path app -c release --show-bin-path); \
+	python3 dylib/tests/l10ncheck.py app/Sources/NotProtonApp/Resources/Localization/Localizable.xcstrings \
+		"$$bin/../../Intermediates.noindex/NotProtonApp.build/$$(basename "$$bin")" zh-Hans
+
 # runcheck owns compat_run.sh, whose warnings wait for a change that can move
 # the embedded __text baseline
 SCRIPTS := $(shell git ls-files '*.sh' 2>/dev/null | grep -v '^dylib/feats/compat_run\.sh$$')
@@ -610,6 +616,8 @@ app: app-payload $(ICON_CAR)
 	printf '%s\n' $$builds | /usr/bin/python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))' \
 		> "$(APP_BUNDLE)/Contents/Resources/supported-crossover.json"
 	cp -R "$$(swift build --package-path app -c release --show-bin-path)/NotProtonApp_NotProtonApp.bundle" \
+		"$(APP_BUNDLE)/Contents/Resources/"
+	cp -R "$(APP_BUNDLE)/Contents/Resources/NotProtonApp_NotProtonApp.bundle/Contents/Resources/"*.lproj \
 		"$(APP_BUNDLE)/Contents/Resources/"
 	cp "$(ICON_DIR)/Assets.car" "$(ICON_DIR)/NotProton.icns" \
 		"$(APP_BUNDLE)/Contents/Resources/"
