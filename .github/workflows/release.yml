@@ -71,7 +71,7 @@ jobs:
 
       - name: Publish the release
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
           VERSION: ${{ inputs.version }}
         run: |
