@@ -5,6 +5,7 @@
 
 #include <dirent.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -562,28 +563,25 @@ int np_compat_ensure_tool_manifest(void) {
     return failed ? -1 : 0;
 }
 
-const char *np_compat_tool_dir(void) {
-    static char dir[640];
-    static int resolved = 0;
+static char g_tool_dir[640];
 
-    if (resolved)
-        return dir[0] ? dir : NULL;
-
-    resolved = 1;
+static void resolve_tool_dir(void) {
     load_tool_list_once();
 
     if (g_tool_count > 0) {
-        snprintf(dir, sizeof(dir), "%s", g_tools[0].dir);
-        return dir;
+        snprintf(g_tool_dir, sizeof(g_tool_dir), "%s", g_tools[0].dir);
+        return;
     }
 
     char tools_dir[512];
-    if (tools_dir_path(tools_dir, sizeof(tools_dir)) != 0) {
-        dir[0] = '\0';
-        return NULL;
-    }
-    snprintf(dir, sizeof(dir), "%s/%s", tools_dir, TOOL_DIR_NAME);
-    return dir;
+    if (tools_dir_path(tools_dir, sizeof(tools_dir)) == 0)
+        snprintf(g_tool_dir, sizeof(g_tool_dir), "%s/%s", tools_dir, TOOL_DIR_NAME);
+}
+
+const char *np_compat_tool_dir(void) {
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, resolve_tool_dir);
+    return g_tool_dir[0] ? g_tool_dir : NULL;
 }
 
 int np_compat_runs_tool(const char *cmd) {
@@ -817,6 +815,23 @@ void np_compat_register_crossover(void *compat_mgr) {
 const char *np_compat_fallback_tool_name(void) {
     load_tool_list_once();
     return g_tool_count > 0 ? g_tools[0].name : TOOL_DIR_NAME;
+}
+
+size_t np_compat_fex_tools(const char **names, size_t max) {
+    load_tool_list_once();
+    size_t n = 0;
+    for (int i = 0; i < g_tool_count; i++) {
+        if (strcmp(g_tools[i].flavor, "fex") != 0) continue;
+        if (n == max) {
+            static atomic_flag warned = ATOMIC_FLAG_INIT;
+            if (!atomic_flag_test_and_set(&warned))
+                NP_WARN("np_compat_fex_tools: more than %zu FEX tools, %s and later "
+                        "are left out", max, g_tools[i].name);
+            break;
+        }
+        names[n++] = g_tools[i].name;
+    }
+    return n;
 }
 
 void *np_compat_registered_tool(void *compat_mgr) {

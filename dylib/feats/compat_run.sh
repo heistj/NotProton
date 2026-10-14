@@ -18,6 +18,125 @@ case "$verb" in
 esac
 
 np_support="$HOME/Library/Application Support/notproton"
+iconmaker="$np_support/iconmaker"
+
+find_client_root() {
+  client_root="$1"
+  while [ -n "$client_root" ] && [ "$client_root" != "/" ] && [ ! -d "$client_root/appcache" ]; do
+    client_root=$(dirname "$client_root")
+  done
+}
+
+read_app_meta() {
+  appinfo_tool="$np_support/appinfo"
+  appinfo_vdf="$client_root/appcache/appinfo.vdf"
+  meta_name=""
+  meta_icon=""
+  meta_clienticon=""
+  if [ -x "$appinfo_tool" ] && [ -f "$appinfo_vdf" ]; then
+    meta=$("$appinfo_tool" "$appinfo_vdf" "$app_id" 2>> "$log") || meta=""
+    meta_name=$(printf '%s\n' "$meta" | sed -n 's/^name=//p')
+    meta_icon=$(printf '%s\n' "$meta" | sed -n 's/^icon=//p')
+    meta_clienticon=$(printf '%s\n' "$meta" | sed -n 's/^clienticon=//p')
+    case "$meta_icon" in *[!0-9a-f]*) meta_icon="" ;; esac
+    case "$meta_clienticon" in *[!0-9a-f]*) meta_clienticon="" ;; esac
+  fi
+}
+
+resolve_icon() {
+  set +e
+  art_dir="$client_root/appcache/librarycache/$app_id"
+  art=""
+  ico=""
+  if [ -n "$meta_clienticon" ]; then
+    ico="$icon_root/clienticon-$meta_clienticon.ico"
+    absent="$icon_root/clienticon-$meta_clienticon.absent"
+    failed="$icon_root/clienticon-$meta_clienticon.failed"
+    find "$icon_root" -maxdepth 1 -name 'clienticon-*'   ! -name "clienticon-$meta_clienticon.*" -delete 2>/dev/null || true
+    find "$absent" -mtime +14 -delete 2>/dev/null || true
+    find "$failed" -mmin +60 -delete 2>/dev/null || true
+    if [ ! -s "$ico" ] && [ ! -f "$absent" ] && [ ! -f "$failed" ]; then
+      url="https://shared.fastly.steamstatic.com/community_assets/images/apps/$app_id/$meta_clienticon.ico"
+      code=$(curl -fsL --connect-timeout 5 --max-time 20 -w '%{http_code}' -o "$ico.new" "$url" 2>>"$log")
+      magic=$(od -An -tx1 -N4 "$ico.new" 2>/dev/null | tr -d ' \n')
+      if [ "$magic" = "00000100" ]; then
+        mv -f "$ico.new" "$ico"
+        echo "fetched client icon $meta_clienticon" >> "$log" 2>&1 || true
+      else
+        rm -f "$ico.new"
+        if [ "$code" = "404" ]; then
+          : > "$absent"
+          echo "no client icon published for $meta_clienticon" >> "$log" 2>&1 || true
+        else
+          : > "$failed"
+          echo "client icon fetch for $meta_clienticon failed (http ${code:-none}), will retry in an hour" >> "$log" 2>&1 || true
+        fi
+      fi
+    fi
+    [ -s "$ico" ] && art="$ico"
+  fi
+  if [ -z "$art" ] && [ -n "$meta_icon" ] && [ -f "$art_dir/$meta_icon.jpg" ]; then
+    art="$art_dir/$meta_icon.jpg"
+  fi
+  if [ -z "$art" ]; then
+    art=$(find "$art_dir" -maxdepth 1 -type f -name '*.jpg' 2>/dev/null |   grep -E '/[0-9a-f]{40}\.jpg$' | head -1)
+  fi
+  # Capsule art (horrible) fallback if no icon at all exists...
+  if [ -z "$art" ]; then
+    for name in library_600x900.jpg header.jpg; do
+      found=$(find "$art_dir" -name "$name" 2>/dev/null | head -1)
+      [ -n "$found" ] && { art="$found"; break; }
+    done
+  fi
+  # non-Steam shortcuts have no art, so (as a temporary measure while I think of
+  # better ways to solve for this) let's use the icon in the EXE itself instead.
+  if [ -z "$art" ] && [ -f "$target" ]; then
+    case "$(printf '%s' "$target" | tr '[:upper:]' '[:lower:]')" in
+      *.exe) art="$target" ;;
+    esac
+  fi
+  icon_source=""
+  if [ -n "$art" ]; then
+    icon_source="$art $(stat -f %m "$art" 2>/dev/null || echo 0)"
+  fi
+  icon_cache="$icon_root/game.icns"
+  icon_status=1
+  if [ -n "$art" ] && [ -s "$icon_cache" ] &&   [ "$(cat "$icon_root/notproton-icon.source" 2>/dev/null)" =   "$icon_source" ]; then
+    icon_status=0
+    echo "icon reused from $art" >> "$log" 2>&1 || true
+  elif [ -n "$art" ] && [ -x "$iconmaker" ]; then
+    if "$iconmaker" "$art" "$icon_cache" >> "$log" 2>&1; then
+      icon_status=0
+      printf '%s\n' "$icon_source" > "$icon_root/notproton-icon.source"
+      echo "icon built from $art" >> "$log" 2>&1 || true
+    elif [ "$art" = "$ico" ]; then
+      # A cached .ico that iconmaker rejects is corrupt and passes the size
+      # guard on every launch, so drop it to force a clean fetch next time.
+      rm -f "$ico"
+      echo "discarded unreadable client icon $meta_clienticon" >> "$log" 2>&1 || true
+    fi
+  fi
+  set -e
+  return $icon_status
+}
+
+case "$verb" in
+  shortcut-icons)
+    app_id="$1"
+    case "$app_id" in ''|0|*[!0-9]*) exit 1 ;; esac
+    case "$2" in /*) ;; *) exit 1 ;; esac
+    find_client_root "$2"
+    icon_root="$np_support/shortcut-icons/$app_id"
+    mkdir -p "$icon_root"
+    log="$icon_root/icon.log"
+    : > "$log"
+    target=""
+    read_app_meta
+    resolve_icon && "$iconmaker" --shortcuts "$app_id" "$icon_cache" "$2/steam.icns" >> "$log" 2>&1 || true
+    exit 0
+    ;;
+esac
+
 # cxcompatdb resolves its database through CX_HOME and logs an error for
 # every module loaded without it :(
 export CX_HOME="$HOME/Library/Application Support/CrossOver"
@@ -53,6 +172,18 @@ if [ "$np_flavor" = rosetta ] || [ ! -x "$WINELOADER" ] || [ ! -x "$WINESERVER" 
 fi
 export WINELOADER WINESERVER
 
+np_dropped=""
+if [ "${wine_unix##*/}" = aarch64-unix ]; then
+  if [ "${CX_GRAPHICS_BACKEND:-}" = d3dmetal ]; then
+    unset -v CX_GRAPHICS_BACKEND
+    np_dropped="CX_GRAPHICS_BACKEND=d3dmetal"
+  fi
+  for name in $(env | LC_ALL=C sed -nE 's/^(D3DM_[A-Z0-9_]*|ROSETTA_ADVERTISE_AVX)=.*/\1/p' | LC_ALL=C sort); do
+    unset -v "$name"
+    np_dropped="$np_dropped${np_dropped:+ }$name"
+  done
+fi
+
 # Keeps Wine from inheriting the prefix and template locks (fd 8 and 9).
 without_lock_fds() {
   "$@" 8>&- 9>&-
@@ -79,6 +210,7 @@ fi
   echo "STEAM_COMPAT_APP_ID=$STEAM_COMPAT_APP_ID"
   echo "-- steam env passed through --"
   env | grep -iE '^(Steam|SDL_)' | sort
+  [ -z "$np_dropped" ] || echo "ignored on arm64 Wine: $np_dropped"
 } >> "$log" 2>&1 || true
 
 stage_step="startup"
@@ -1214,24 +1346,9 @@ fi
 # Fixes CrossOver window focus issues
 steam_root="$(dirname "$(dirname "$(dirname "$STEAM_COMPAT_DATA_PATH")")")"
 manifest="$steam_root/steamapps/appmanifest_$app_id.acf"
-client_root="$STEAM_COMPAT_CLIENT_INSTALL_PATH"
-while [ -n "$client_root" ] && [ "$client_root" != "/" ] && [ ! -d "$client_root/appcache" ]; do
-  client_root=$(dirname "$client_root")
-done
+find_client_root "$STEAM_COMPAT_CLIENT_INSTALL_PATH"
 # Icon stuff
-appinfo_tool="$HOME/Library/Application Support/notproton/appinfo"
-appinfo_vdf="$client_root/appcache/appinfo.vdf"
-meta_name=""
-meta_icon=""
-meta_clienticon=""
-if [ -x "$appinfo_tool" ] && [ -f "$appinfo_vdf" ]; then
-  meta=$("$appinfo_tool" "$appinfo_vdf" "$app_id" 2>> "$log") || meta=""
-  meta_name=$(printf '%s\n' "$meta" | sed -n 's/^name=//p')
-  meta_icon=$(printf '%s\n' "$meta" | sed -n 's/^icon=//p')
-  meta_clienticon=$(printf '%s\n' "$meta" | sed -n 's/^clienticon=//p')
-  case "$meta_icon" in *[!0-9a-f]*) meta_icon="" ;; esac
-  case "$meta_clienticon" in *[!0-9a-f]*) meta_clienticon="" ;; esac
-fi
+read_app_meta
 game_name="$meta_name"
 if [ -z "$game_name" ] && [ -f "$manifest" ]; then
   game_name=$(sed -n 's/.*"name"[[:space:]]*"\(.*\)".*/\1/p' "$manifest" | head -1)
@@ -1255,82 +1372,10 @@ loader_res="$loader_contents/Resources"
 mkdir -p "$loader_macos" "$loader_res"
 
 icon_arg=""
-resolve_icon() {
-  set +e
-  iconmaker="$HOME/Library/Application Support/notproton/iconmaker"
-  art_dir="$client_root/appcache/librarycache/$app_id"
-  art=""
-  if [ -n "$meta_clienticon" ]; then
-    ico="$loader_root/clienticon-$meta_clienticon.ico"
-    absent="$loader_root/clienticon-$meta_clienticon.absent"
-    failed="$loader_root/clienticon-$meta_clienticon.failed"
-    find "$loader_root" -maxdepth 1 -name 'clienticon-*'   ! -name "clienticon-$meta_clienticon.*" -delete 2>/dev/null || true
-    find "$absent" -mtime +14 -delete 2>/dev/null || true
-    find "$failed" -mmin +60 -delete 2>/dev/null || true
-    if [ ! -s "$ico" ] && [ ! -f "$absent" ] && [ ! -f "$failed" ]; then
-      url="https://shared.fastly.steamstatic.com/community_assets/images/apps/$app_id/$meta_clienticon.ico"
-      code=$(curl -fsL --connect-timeout 5 --max-time 20 -w '%{http_code}' -o "$ico.new" "$url" 2>>"$log")
-      magic=$(od -An -tx1 -N4 "$ico.new" 2>/dev/null | tr -d ' \n')
-      if [ "$magic" = "00000100" ]; then
-        mv -f "$ico.new" "$ico"
-        echo "fetched client icon $meta_clienticon" >> "$log" 2>&1 || true
-      else
-        rm -f "$ico.new"
-        if [ "$code" = "404" ]; then
-          : > "$absent"
-          echo "no client icon published for $meta_clienticon" >> "$log" 2>&1 || true
-        else
-          : > "$failed"
-          echo "client icon fetch for $meta_clienticon failed (http ${code:-none}), will retry in an hour" >> "$log" 2>&1 || true
-        fi
-      fi
-    fi
-    [ -s "$ico" ] && art="$ico"
-  fi
-  if [ -z "$art" ] && [ -n "$meta_icon" ] && [ -f "$art_dir/$meta_icon.jpg" ]; then
-    art="$art_dir/$meta_icon.jpg"
-  fi
-  if [ -z "$art" ]; then
-    art=$(find "$art_dir" -maxdepth 1 -type f -name '*.jpg' 2>/dev/null |   grep -E '/[0-9a-f]{40}\.jpg$' | head -1)
-  fi
-  # Capsule art (horrible) fallback if no icon at all exists...
-  if [ -z "$art" ]; then
-    for name in library_600x900.jpg header.jpg; do
-      found=$(find "$art_dir" -name "$name" 2>/dev/null | head -1)
-      [ -n "$found" ] && { art="$found"; break; }
-    done
-  fi
-  # non-Steam shortcuts have no art, so (as a temporary measure while I think of
-  # better ways to solve for this) let's use the icon in the EXE itself instead.
-  if [ -z "$art" ] && [ -f "$target" ]; then
-    case "$(printf '%s' "$target" | tr '[:upper:]' '[:lower:]')" in
-      *.exe) art="$target" ;;
-    esac
-  fi
-  icon_source=""
-  if [ -n "$art" ]; then
-    icon_source="$art $(stat -f %m "$art" 2>/dev/null || echo 0)"
-  fi
-  icon_cache="$loader_root/game.icns"
-  if [ -n "$art" ] && [ -s "$icon_cache" ] &&   [ "$(cat "$loader_root/notproton-icon.source" 2>/dev/null)" =   "$icon_source" ] && cp -f "$icon_cache" "$loader_res/game.icns"; then
-    icon_arg="  <key>CFBundleIconFile</key><string>game</string>"
-    echo "icon reused from $art" >> "$log" 2>&1 || true
-  elif [ -n "$art" ] && [ -x "$iconmaker" ]; then
-    if "$iconmaker" "$art" "$icon_cache" >> "$log" 2>&1 &&   cp -f "$icon_cache" "$loader_res/game.icns"; then
-      icon_arg="  <key>CFBundleIconFile</key><string>game</string>"
-      printf '%s\n' "$icon_source" > "$loader_root/notproton-icon.source"
-      echo "icon built from $art" >> "$log" 2>&1 || true
-    elif [ "$art" = "$ico" ]; then
-      # A cached .ico that iconmaker rejects is corrupt and passes the size
-      # guard on every launch, so drop it to force a clean fetch next time.
-      rm -f "$ico"
-      echo "discarded unreadable client icon $meta_clienticon" >> "$log" 2>&1 || true
-    fi
-  fi
-  set -e
-  return 0
-}
-resolve_icon || true
+icon_root="$loader_root"
+if resolve_icon && cp -f "$icon_cache" "$loader_res/game.icns"; then
+  icon_arg="  <key>CFBundleIconFile</key><string>game</string>"
+fi
 [ -n "$icon_arg" ] || echo "no icon resolved, launching without one" >> "$log" 2>&1 || true
 
 uielement_arg=""
@@ -1461,35 +1506,6 @@ install_bundle() (
 )
 install_bundle
 
-wine_helpers='winedevice\.exe|services\.exe|plugplay\.exe|svchost\.exe'
-wine_helpers="$wine_helpers|rpcss\.exe|explorer\.exe|steam\.exe"
-wine_helpers="$wine_helpers|winemenubuilder\.exe|conhost\.exe|start\.exe"
-wine_helpers="$wine_helpers|wineboot\.exe|rundll32\.exe|tabtip\.exe"
-wine_helpers="$wine_helpers|vc_redist|vcredist|dxsetup\.exe|msiexec\.exe"
-wine_helpers="$wine_helpers|installinf|iscriptevaluator\.exe|regsvr32\.exe"
-wine_helpers="$wine_helpers|winedbg\.exe|unitycrashhandler"
-prefix_game_running() {
-  command -v lsof >/dev/null 2>&1 || return 1
-  dir=$(prefix_server_dir) || return 1
-  [ -d "$dir" ] || return 1
-  pids=$(lsof -t +D "$dir" 2>/dev/null | sort -u | tr '\n' ',')
-  pids=${pids%,}
-  [ -n "$pids" ] || return 1
-  # shellcheck disable=SC1003 # the pair matches the backslash in a drive path
-  ps -p "$pids" -o args= 2>/dev/null | grep -E '^[A-Za-z]:\\' | grep -viE "$wine_helpers" | grep -q .
-}
-
-wait_prefix_idle() {
-  idle=0
-  tick=0
-  while [ "$idle" -lt 10 ] && [ "$tick" -lt 300 ]; do
-    tick=$((tick + 1))
-    if prefix_game_running; then idle=0; else idle=$((idle + 1)); fi
-    sleep 1
-  done
-  echo "wait_prefix_idle done after tick=$tick idle=$idle" >> "$log" 2>&1 || true
-}
-
 kill_wine_prefix() {
   "$WINESERVER" -k >> "$log" 2>&1 || true
   "$WINESERVER" -w >> "$log" 2>&1 || true
@@ -1522,7 +1538,7 @@ else
   echo "=== client staged no overlay renderer, overlay disabled ===" >> "$log" 2>&1 || true
 fi
 set -- --args "$shim_exe" "$@"
-for name in $(env | sed -nE 's/^(CX_APPLEGPTK_LIBD3DSHARED_PATH|Steam[A-Za-z0-9]*|(CX_GRAPHICS|D3DM_|DXMT_|DXVK_|MTL_|ROSETTA_)[A-Z0-9_]*)=.*/\1/p'); do
+for name in $(env | LC_ALL=C sed -nE 's/^(CX_APPLEGPTK_LIBD3DSHARED_PATH|Steam[A-Za-z0-9]*|(CX_GRAPHICS|D3DM_|DXMT_|DXVK_|MTL_|ROSETTA_)[A-Z0-9_]*)=.*/\1/p'); do
   eval "value=\$$name"
   # shellcheck disable=SC2154 # eval assigns value on the line above
   set -- --env "$name=$value" "$@"
@@ -1549,29 +1565,7 @@ lsregister="$lsregister/Frameworks/LaunchServices.framework/Support/lsregister"
 open -n -W -a "$loader_app" "$@" >> "$log" 2>&1 &
 open_pid=$!
 status=0
-seen=0
-idle=0
-while :; do
-  if prefix_game_running; then
-    seen=1
-    idle=0
-  else
-    idle=$((idle + 1))
-  fi
-  if ! kill -0 "$open_pid" 2>/dev/null; then
-    wait "$open_pid" || status=$?
-    echo "=== bundle exited status=$status ===" >> "$log" 2>&1 || true
-    if [ "$status" -le 128 ]; then
-      wait_prefix_idle
-    fi
-    break
-  fi
-  if [ "$seen" -eq 1 ] && [ "$idle" -ge 10 ]; then
-    echo "=== game tree gone, ending session ===" >> "$log" 2>&1 || true
-    break
-  fi
-  sleep 1
-done
+wait "$open_pid" || status=$?
 echo "=== game exited status=$status, killing wine prefix ===" >> "$log" 2>&1 || true
 kill_wine_prefix
 echo "=== wine prefix killed, session ending ===" >> "$log" 2>&1 || true

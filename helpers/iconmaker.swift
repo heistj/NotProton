@@ -2,9 +2,15 @@
 // rect (squircle) that native app icons use. Input is scaled to fill 1024x1024
 // and clipped. Output covers 16x16 through 512x512@2x.
 // Usage: iconmaker <input-image|input.exe> <output.icns>
+//        iconmaker --shortcuts <appid> <icon.icns> <stock.icns>
 
 import AppKit
 import Foundation
+
+if CommandLine.arguments.count == 5, CommandLine.arguments[1] == "--shortcuts" {
+    np_shortcuts_icons(getenv("HOME"), CommandLine.arguments[2], CommandLine.arguments[3], CommandLine.arguments[4])
+    exit(0)
+}
 
 guard CommandLine.arguments.count == 3 else {
     fputs("usage: iconmaker <input-image|input.exe> <output.icns>\n", stderr)

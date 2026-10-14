@@ -5,8 +5,8 @@ NotProton enables the Steam Play experience from Linux Steam in the macOS Steam 
 This is done by forcibly enabling the Steam Play functionality in macOS Steam (which is
 present and inert) as well as by porting some components of Valve's Proton to macOS.
 
-This tool is intended to be used with the stable Steam Client (version 1788652215) as well as the beta Steam Client (version 1791686101) paired with **CrossOver 26.3 or CrossOver Preview
-20261006 or 2026082**, with more supported versions to come. 
+This tool is intended to be used with the stable Steam Client (version 1791918634) as well as the beta Steam Client (version 1791686101) paired with **CrossOver 26.3 or CrossOver [Preview](https://www.codeweavers.com/preview)
+20261006 or 20260821**, with more supported versions to come.
 
 Supporting specifically CrossOver is a design goal of this project. Better support for modifying CrossOver (using custom builds of DXMT/patched D3DMetal/MacGameVideoFix) will come in a future update, but support for alternatives to CrossOver itself is not planned.
 
@@ -41,6 +41,6 @@ Developer Notes:
 
 As far as the source structure goes, the macOS app itself is located in the ```app``` folder. The core logic is in ```dylib```.
 ```lsteamclient``` is a macOS port of Valve's lsteamclient. ```steam-shim```is a port of Valve's
-steam-helper from Proton 9. ntdll-patch patches the copy of CrossOver that the app
+steam-helper from Proton 9.0. ntdll-patch patches the copy of CrossOver that the app
 makes/places in the ```~/Library/Application Support/notproton/runners/``` folder so that
 lsteamclient is loaded.

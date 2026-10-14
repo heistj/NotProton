@@ -236,6 +236,7 @@ static void tool_list_cases(void) {
         return;
     }
     fputs("notproton\t27.0.0.40921-fex\tfex\tCrossOver Preview (FEX)\n"
+          "notproton-fex-41069\t27.0.0.41069-fex\tfex\tCrossOver Preview 41069 (FEX)\n"
           "notproton-fex-rosetta\t27.0.0.40921-fex\trosetta\tCrossOver Preview (Rosetta)\n"
           "notproton-26.3\t26.3.0.39832\trosetta\tCrossOver 26.3\n"
           "notproton\t26.3.0.39832\trosetta\tDuplicate\n"
@@ -249,11 +250,11 @@ static void tool_list_cases(void) {
     int kept = np_compat_load_tool_list(path, "/tools");
     unlink(path);
 
-    check(kept == 3, "only well-formed, unique, notproton-named lines are kept");
+    check(kept == 4, "only well-formed, unique, notproton-named lines are kept");
     check(strcmp(g_tools[0].name, "notproton") == 0
           && strcmp(g_tools[0].flavor, "fex") == 0, "the first line stays first");
-    check(strcmp(g_tools[2].build, "26.3.0.39832") == 0
-          && strcmp(g_tools[2].dir, "/tools/notproton-26.3") == 0,
+    check(strcmp(g_tools[3].build, "26.3.0.39832") == 0
+          && strcmp(g_tools[3].dir, "/tools/notproton-26.3") == 0,
           "each tool carries its build and directory");
 
     uint8_t *mgr = build_manager(3, -1);
@@ -263,6 +264,14 @@ static void tool_list_cases(void) {
     *(const char **)(entries + COMPAT_TOOL_NAME_OFF) = "notproton";
     check(np_compat_registered_tool(mgr) == entries,
           "the first listed tool wins when the manager holds it");
+
+    const char *fex[3] = { NULL, NULL, NULL };
+    check(np_compat_fex_tools(fex, 3) == 2 && strcmp(fex[0], "notproton") == 0
+          && strcmp(fex[1], "notproton-fex-41069") == 0 && !fex[2],
+          "only the fex flavor counts as FEX, not a FEX build's Rosetta tool");
+    fex[0] = fex[1] = NULL;
+    check(np_compat_fex_tools(fex, 1) == 1 && strcmp(fex[0], "notproton") == 0 && !fex[1],
+          "the FEX list stops at its limit, keeping the first listed");
 
     f = fopen(path, "w");
     if (!f) {
@@ -278,6 +287,7 @@ static void tool_list_cases(void) {
           && strcmp(g_tools[0].dir, "/tools/notproton-0") == 0, "a long list keeps every tool");
     check(strcmp(np_compat_fallback_tool_name(), "notproton-0") == 0,
           "the fallback is the first configured tool");
+    check(np_compat_fex_tools(fex, 3) == 0, "a list with no FEX tool has no FEX names");
 
     check(np_compat_load_tool_list("out/compatcheck-missing", "/tools") == 0
           && !g_tool_list_present, "a missing list keeps no tools and says so");

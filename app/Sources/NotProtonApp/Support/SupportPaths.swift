@@ -38,6 +38,10 @@ enum SupportPaths {
         home.appending(path: "Library/Caches/\(supportDirName)/valve-packages")
     }
 
+    static var winetricksDownloads: URL {
+        home.appending(path: "Library/Caches/\(supportDirName)/winetricks")
+    }
+
     static var deployedVersion: URL { support.appending(path: "dylib.version") }
 
     // Read by the dylib at Steam launch, in np_compat_load_tool_list.
@@ -67,7 +71,15 @@ enum SupportPaths {
     static let bridgeCacheFolder = "bridge"
 
     enum Steam {
-        static var app: URL { URL(filePath: "/Applications/Steam.app") }
+        static let defaultApp = URL(filePath: "/Applications/Steam.app")
+        static let appPathKey = "steamAppPath"
+
+        static var app: URL {
+            UserDefaults.standard.string(forKey: appPathKey).map { URL(filePath: $0) } ?? defaultApp
+        }
+        static func isUnreachable(_ bundle: URL = app) -> Bool {
+            !FileManager.default.fileExists(atPath: bundle.deletingLastPathComponent().path(percentEncoded: false))
+        }
         static var infoPlist: URL { infoPlist(inBundle: app) }
         static var executable: URL { app.appending(path: "Contents/MacOS/steam_osx") }
         static var deployedDylib: URL { deployedDylib(inBundle: app) }

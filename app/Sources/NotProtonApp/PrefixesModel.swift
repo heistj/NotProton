@@ -145,6 +145,14 @@ final class PrefixesModel {
         PrefixTools.reveal(prefix)
     }
 
+    func hasLog(_ log: PrefixLog, for prefix: WinePrefix) -> Bool {
+        PrefixTools.hasLog(log, for: prefix)
+    }
+
+    func open(_ log: PrefixLog, for prefix: WinePrefix) {
+        PrefixTools.open(log, for: prefix)
+    }
+
     func delete(_ targets: [WinePrefix]) async {
         await eachInTurn(targets, { try PrefixTools.delete($0) }) { deleted in
             if deleted.count == 1 {
@@ -235,7 +243,7 @@ final class PrefixesModel {
     @discardableResult
     private func eachInTurn<Made: Sendable>(
         _ targets: [WinePrefix],
-        _ work: @escaping @Sendable (WinePrefix) throws -> Made,
+        _ work: @escaping @Sendable (WinePrefix) async throws -> Made,
         saying sentence: ([Step<Made>]) -> String?
     ) async -> [Step<Made>] {
         guard !targets.isEmpty else { return [] }
@@ -247,7 +255,7 @@ final class PrefixesModel {
         var refused: [Error] = []
         for prefix in targets {
             do {
-                let made = try await Task.detached { try work(prefix) }.value
+                let made = try await Task.detached { try await work(prefix) }.value
                 done.append((prefix: prefix, made: made))
             } catch {
                 refused.append(error)
@@ -284,6 +292,14 @@ final class PrefixesModel {
         act(on: prefix) {
             try PrefixTools.run(executable, in: prefix)
             return String(localized: "Started \(executable.lastPathComponent) in \(prefix.title).")
+        }
+    }
+
+    func winetricks(_ text: String, in prefix: WinePrefix) async {
+        let verbs = PrefixTools.winetricksVerbs(text)
+        await eachInTurn([prefix], { try await PrefixTools.winetricks(verbs, in: $0) }) { done in
+            guard !done.isEmpty else { return nil }
+            return String(localized: "Winetricks ran \(verbs.joined(separator: " ")) in \(prefix.title).")
         }
     }
 

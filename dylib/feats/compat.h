@@ -120,6 +120,9 @@ void *np_compat_registered_tool(void *compat_mgr);
 // Name of the first tool in the app's list, which unmapped Windows games run under.
 const char *np_compat_fallback_tool_name(void);
 
+// Names of the listed tools whose flavor is fex, up to max. Returns how many it wrote.
+size_t np_compat_fex_tools(const char **names, size_t max);
+
 uint32_t np_compat_manager_tools_max(void);
 
 // Absolute path to the directory of the first tool in the app's list, or NULL.
