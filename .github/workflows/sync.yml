@@ -2,8 +2,8 @@ name: sync-upstream
 
 on:
   schedule:
-    # Run every 6 hours with an offset to avoid top-of-the-hour queue congestion (00:17, 06:17, 12:17, 18:17 UTC)
-    - cron: '17 */6 * * *'
+    # Run every 2 hours with an offset to avoid queue congestion (00:17, 02:17, 04:17, ... UTC)
+    - cron: '17 */2 * * *'
   workflow_dispatch:
 
 permissions:
