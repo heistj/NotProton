@@ -1086,6 +1086,18 @@ link_fonts() {
   done
 }
 
+# Wine loads its own VC++ runtime over Microsoft's, which breaks some games
+native_vc_runtime() {
+  for name in concrt140 msvcp140 msvcp140_1 msvcp140_2 msvcp140_atomic_wait msvcp140_codecvt_ids \
+    vcamp140 vccorlib140 vcomp140 vcruntime140 vcruntime140_1; do
+    dll="$WINEPREFIX/drive_c/windows/system32/$name.dll"
+    [ -f "$dll" ] || continue
+    if [ "$(dd if="$dll" bs=1 skip=64 count=16 2>/dev/null)" != "Wine builtin DLL" ]; then
+      printf '%s=n,b;' "$name"
+    fi
+  done
+}
+
 if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
   export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx"
   stage_step="prefix lock"
@@ -1296,7 +1308,8 @@ if [ -d "$bridge_src" ] && [ -n "$WINEPREFIX" ]; then
   install_legacy_steam_dll
   export WINEDLLPATH="$prefix_steam:$WINEDLLPATH"
   # If the same DLL appears twice in WINEDLLOVERRIDES, the last entry wins.
-  export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}steamclient=n;steamclient64=n;lsteamclient=b"
+  vc_overrides=$(native_vc_runtime)
+  export WINEDLLOVERRIDES="${vc_overrides}${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}steamclient=n;steamclient64=n;lsteamclient=b"
   native_client="$STEAM_COMPAT_CLIENT_INSTALL_PATH"
   if [ -z "$native_client" ]; then
     native_client="$HOME/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS"
@@ -1564,6 +1577,7 @@ lsregister="$lsregister/Frameworks/LaunchServices.framework/Support/lsregister"
 [ -x "$lsregister" ] && "$lsregister" -f "$loader_app" >> "$log" 2>&1 || true
 open -n -W -a "$loader_app" "$@" >> "$log" 2>&1 &
 open_pid=$!
+/usr/bin/caffeinate -d -i -w "$open_pid" >> "$log" 2>&1 &
 status=0
 wait "$open_pid" || status=$?
 echo "=== game exited status=$status, killing wine prefix ===" >> "$log" 2>&1 || true
