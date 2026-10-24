@@ -31,9 +31,13 @@ const FORMS = {
 
 // `fallback` and `fexTools` stand in for what the hook sets before the transform.
 function panel(emit, form, globals = { document: { documentElement: { lang: 'en' } } },
-               { fallback = 'notproton', fexTools = [], names = ['R0', 'B0'], data = false, drop = [] } = {}) {
+               { fallback = 'notproton', fexTools = [], names = ['R0', 'B0'], data = false, drop = [],
+                 ready, feats } = {}) {
+  const env = { ...process.env };
+  if (ready !== undefined) env.NP_TEST_READY = ready;
+  if (feats !== undefined) env.NP_TEST_FEATS = feats;
   const raw = execFileSync(emit, [form + (data ? '-data' : ''), fallback, ...fexTools],
-                           { encoding: 'utf8' }).trim();
+                           { encoding: 'utf8', env }).trim();
   const barrel = barrelFor(emit);
   for (const n of drop) delete barrel[n];
   const f = FORMS[form];
