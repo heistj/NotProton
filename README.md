@@ -8,7 +8,7 @@ present and inert) as well as by porting some components of Valve's Proton to ma
 This tool is intended to be used with the stable Steam Client (version 1792618285) as well as the beta Steam Client (version 1792626604) paired with **CrossOver 26.3 or CrossOver [Preview](https://www.codeweavers.com/preview)
 20260821 / 20261006 / 20261015**, with more supported versions to come.
 
-**NTFS file systems/drivers are not currently supported.**
+**Tuxera NTFS is not supported. Tuxera has a bad bug that causes corruption. I've reported the bug to them. If you need NTFS, Paragon NTFS may work better, but I have not tested it. I will be implementing a work around for this (horrible) bug soon.**
 
 Supporting specifically CrossOver is a design goal of this project. Better support for modifying CrossOver (using custom builds of DXMT/patched D3DMetal/MacGameVideoFix) will come in a future update, but support for alternatives to CrossOver itself is not planned.
 

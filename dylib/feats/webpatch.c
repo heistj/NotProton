@@ -687,21 +687,21 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "Runs on Windows, no Mac OS version", \
     "Funziona su Windows, nessuna versione macOS")
 
-// Rebuild row in the CrossOver panel. Chinese and Italian wait for a translator.
+// Rebuild row in the CrossOver panel. Chinese waits for a translator.
 // The row is redrawn on every poll, so the bar keeps its phase from when the rebuild started
 // instead of restarting on each redraw.
-#define NP_PREFIX_NEED NP_WEB_TEXT("Switching to this compatibility tool requires a prefix rebuild. Rebuild now?", "Switching to this compatibility tool requires a prefix rebuild. Rebuild now?", "Switching to this compatibility tool requires a prefix rebuild. Rebuild now?")
-#define NP_PREFIX_BACKUP NP_WEB_TEXT("Backup & Rebuild Prefix", "Backup & Rebuild Prefix", "Backup & Rebuild Prefix")
-#define NP_PREFIX_REBUILD NP_WEB_TEXT("Rebuild Prefix", "Rebuild Prefix", "Rebuild Prefix")
-#define NP_PREFIX_RUNNING NP_WEB_TEXT("Quit the game to rebuild.", "Quit the game to rebuild.", "Quit the game to rebuild.")
-#define NP_PREFIX_SETUP NP_WEB_TEXT("Rebuilding prefix\\u2026", "Rebuilding prefix\\u2026", "Rebuilding prefix\\u2026")
-#define NP_PREFIX_COPY NP_WEB_TEXT("Copying your files\\u2026", "Copying your files\\u2026", "Copying your files\\u2026")
-#define NP_PREFIX_FINISH NP_WEB_TEXT("Finishing\\u2026", "Finishing\\u2026", "Finishing\\u2026")
-#define NP_PREFIX_DONE NP_WEB_TEXT("Prefix rebuilt.", "Prefix rebuilt.", "Prefix rebuilt.")
-#define NP_PREFIX_DONE_BACKUP NP_WEB_TEXT("Prefix rebuilt. A backup of the original is in NotProton's Prefixes view.", "Prefix rebuilt. A backup of the original is in NotProton's Prefixes view.", "Prefix rebuilt. A backup of the original is in NotProton's Prefixes view.")
-#define NP_PREFIX_FAILED NP_WEB_TEXT("Prefix rebuild failed!", "Prefix rebuild failed!", "Prefix rebuild failed!")
-#define NP_PREFIX_LOG NP_WEB_TEXT("Open Log", "Open Log", "Open Log")
-#define NP_PREFIX_APP NP_WEB_TEXT("Couldn't find the NotProton app. Move NotProton to Applications, open it and click Install again.", "Couldn't find the NotProton app. Move NotProton to Applications, open it and click Install again.", "Couldn't find the NotProton app. Move NotProton to Applications, open it and click Install again.")
+#define NP_PREFIX_NEED NP_WEB_TEXT("Switching to this compatibility tool requires a prefix rebuild. Rebuild now?", "Switching to this compatibility tool requires a prefix rebuild. Rebuild now?", "Per passare a questo strumento di compatibilit\\u00e0 bisogna ricostruire il prefisso. Ricostruirlo ora?")
+#define NP_PREFIX_BACKUP NP_WEB_TEXT("Backup & Rebuild Prefix", "Backup & Rebuild Prefix", "Backup e ricostruisci prefisso")
+#define NP_PREFIX_REBUILD NP_WEB_TEXT("Rebuild Prefix", "Rebuild Prefix", "Ricostruisci prefisso")
+#define NP_PREFIX_RUNNING NP_WEB_TEXT("Quit the game to rebuild.", "Quit the game to rebuild.", "Chiudi il gioco per ricostruire il prefisso.")
+#define NP_PREFIX_SETUP NP_WEB_TEXT("Rebuilding prefix\\u2026", "Rebuilding prefix\\u2026", "Ricostruzione del prefisso\\u2026")
+#define NP_PREFIX_COPY NP_WEB_TEXT("Copying your files\\u2026", "Copying your files\\u2026", "Copia dei tuoi file\\u2026")
+#define NP_PREFIX_FINISH NP_WEB_TEXT("Finishing\\u2026", "Finishing\\u2026", "Ultimi passaggi\\u2026")
+#define NP_PREFIX_DONE NP_WEB_TEXT("Prefix rebuilt.", "Prefix rebuilt.", "Prefisso ricostruito.")
+#define NP_PREFIX_DONE_BACKUP NP_WEB_TEXT("Prefix rebuilt. A backup of the original is in NotProton's Prefixes view.", "Prefix rebuilt. A backup of the original is in NotProton's Prefixes view.", "Prefisso ricostruito. Il backup dell'originale \\u00e8 nella sezione Prefissi di NotProton.")
+#define NP_PREFIX_FAILED NP_WEB_TEXT("Prefix rebuild failed!", "Prefix rebuild failed!", "Ricostruzione del prefisso non riuscita.")
+#define NP_PREFIX_LOG NP_WEB_TEXT("Open Log", "Open Log", "Apri registro")
+#define NP_PREFIX_APP NP_WEB_TEXT("Couldn't find the NotProton app. Move NotProton to Applications, open it and click Install again.", "Couldn't find the NotProton app. Move NotProton to Applications, open it and click Install again.", "App NotProton non trovata. Sposta NotProton in Applicazioni, aprila e fai di nuovo clic su Installa.")
 
 #define NP_CX_PREFIX_ROW \
     "globalThis.MSCXPrefixRow=(e,id)=>{if(e.npApp===id)return;e.npStop&&e.npStop();e.npApp=id;let ter" \
@@ -844,7 +844,7 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "]},\"gfx\")," \
     "dx&&(0," RT ".jsx)(" BARREL ".XY," \
     "{label:npL(\"MetalFX Upscaling (Samples from the resolution the game is set to)\"," \
-    "\"MetalFX 超分辨率（以游戏设置的分辨率为采样来源）\",\"Upscaling MetalFX (ingrandisce l'immagine dalla risoluzione impostata nel gioco)\")," \
+    "\"MetalFX 超分辨率（以游戏设置的分辨率为采样来源）\",\"Upscaling MetalFX (ingrandisce l'immagine dalla risoluzione del gioco)\")," \
     "children:(0," RT ".jsx)(" BARREL ".m,{rgOptions:U," \
     "selectedOption:sw?(U.find(u=>u.data&&+u.data===fn)||{data:String(fn)}).data:\"\"," \
     "onChange:v=>s(dflt&&v.data===pick(k=>dflt(k)||\"\")" \
@@ -904,19 +904,19 @@ static int out_expand(np_out_t *o, const char *replace, const np_cap_t *caps) {
     "if(" NP_STR(NP_COMPATSVC_PARTLY_APPLIED) "===x.GetEResult()){all[nn]=d;lost=1;globalThis.MSCXDefaultsLost=1;bump(c=>c+1);console.error(\"NotProton: Apply left some versions " \
     "with their own settings, so Default Compatibility Settings are hidden until Steam restarts\");return}" \
     "done(x,()=>{all[nn]=d;BL.forEach(y=>{y.runner===nn&&(y.override=null)})})" \
-    "&&my===gen&&sok(\"Applied. Every \"+kk+\" Compatibility Tool now uses these settings.\")})})}," \
+    "&&my===gen&&sok(" NP_WEB_IS_IT "?\"Applicate. Ora tutti gli strumenti di compatibilit\\u00e0 \"+kk+\" usano queste impostazioni.\":\"Applied. Every \"+kk+\" Compatibility Tool now uses these settings.\")})})}," \
     "pickTool=t=>{const p=BL.find(x=>x.id===t);if(p){si(p.id);sr(\"fex\"===p.runner?1:0);clr()}}," \
     "btn=(k,l,t,f,dsc)=>(0," RT ".jsx)(" BARREL ".D0,{label:l,description:dsc," \
     "childrenContainerWidth:\"min\",children:(0," RT ".jsx)(" BARREL ".$n,{className:\"MSCXSetBtn\"," \
     "onClick:f,children:t})},k);" \
     "eff(()=>{const on=e=>pickTool(e.detail);globalThis.addEventListener?.(\"mscxdefaulttool\",on);" \
     "return()=>globalThis.removeEventListener?.(\"mscxdefaulttool\",on)},[]);if(lost)return null;" \
-    "return MSCXPanel({fex,get:G,saved:G,set:s,head:(0," RT ".jsxs)(" BARREL ".XY,{label:\"Default Compatibility Settings\",children:[" \
-    "BL.length?(0," RT ".jsx)(" BARREL ".Vb,{label:\"CrossOver version\"," \
+    "return MSCXPanel({fex,get:G,saved:G,set:s,head:(0," RT ".jsxs)(" BARREL ".XY,{label:" NP_WEB_TEXT("Default Compatibility Settings", "Default Compatibility Settings", "Impostazioni di compatibilit\\u00e0 predefinite") ",children:[" \
+    "BL.length?(0," RT ".jsx)(" BARREL ".Vb,{label:" NP_WEB_TEXT("CrossOver version", "CrossOver version", "Versione di CrossOver") "," \
     "bMatchWidth:!1,rgOptions:BL.map(x=>({data:x.id,label:x.label}))," \
     "selectedOption:b?b.id:\"\",onChange:v=>{const p=BL.find(x=>x.id===v.data);if(!p)return;" \
     "si(p.id);sr(p.runner===\"fex\"?1:0);clr()}},\"version\"):null," \
-    "b?btn(\"apply\",\"Apply as defaults for all \"+kind+\" Compatibility Tools\",\"Apply\",apply,ok||void 0):null" \
+    "b?btn(\"apply\",(" NP_WEB_IS_IT "?\"Applica come predefinite a tutti gli strumenti di compatibilit\\u00e0 \"+kind:\"Apply as defaults for all \"+kind+\" Compatibility Tools\")," NP_WEB_TEXT("Apply", "Apply", "Applica") ",apply,ok||void 0):null" \
     "]},\"defaults\")})};" \
     "return()=>{const up=typeof globalThis.MSCXUseState==\"function\"&&typeof globalThis.MSCXUseEffect==\"function\"" \
     "&&typeof globalThis.MSCXSpecifyRoute==\"function\";" \
